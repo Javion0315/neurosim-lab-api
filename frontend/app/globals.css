@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root { color-scheme: dark; }
+html { scroll-behavior: smooth; }
+body { background: #0b111a; color: #e7f0f1; font-family: Arial, Helvetica, sans-serif; }
+* { box-sizing: border-box; }
+::selection { background: #91e6cb; color: #0b111a; }
+.grid-bg { background-image: linear-gradient(#91e6cb0b 1px, transparent 1px), linear-gradient(90deg, #91e6cb0b 1px, transparent 1px); background-size: 32px 32px; }
+.section-title { font-size: clamp(1.7rem, 3vw, 2.4rem); font-weight: 700; letter-spacing: -.035em; }
+.card { background: #111b27; border: 1px solid #263848; border-radius: 16px; }
+.label { color: #91e6cb; font-size: .72rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+input { color-scheme: dark; }
+input:focus, button:focus-visible, a:focus-visible { outline: 2px solid #91e6cb; outline-offset: 3px; }

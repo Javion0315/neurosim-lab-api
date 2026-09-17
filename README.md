@@ -75,66 +75,53 @@ Phase 2: Brian2 network and pair-based STDP. Phase 3: a small public NWB example
 
 ## Deployment
 
-This repository uses **two Vercel projects from one GitHub repository**. Vercel's single-project multi-service feature is currently beta. The public frontend serves `/` and accepts `/api/*` on its own origin; a Next.js rewrite forwards those requests to the separately deployed FastAPI project. The browser never needs the backend hostname. See Vercel's [monorepo guide](https://vercel.com/docs/monorepos), [Python runtime guide](https://vercel.com/docs/functions/runtimes/python), and [FastAPI guide](https://vercel.com/docs/frameworks/backend/fastapi).
+This repository uses one [Vercel Services](https://vercel.com/docs/services) project. Import the repository with its **Root Directory set to the repository root**, and choose **Services** as the Vercel project framework. The root `vercel.json` defines two services and public routing:
 
-### 1. Push to GitHub
+| Service | Root | Framework | Public route |
+| --- | --- | --- | --- |
+| `frontend` | `frontend/` | Next.js | `/(.*)` after API routes |
+| `backend` | `backend/` | FastAPI | `/api/(.*)` |
 
-Create an empty GitHub repository named `neurosim-lab`. Install Git if `git --version` fails, then from this repository root:
+The first matching top-level rewrite wins. Vercel passes the original URL path to FastAPI, so `/api/health` reaches the existing `/api/health` handler directly. There is no `/api/backend` prefix. See [Vercel Services routing](https://vercel.com/docs/services/routing). The backend service uses the canonical `app.main:app` from `backend/app/main.py`; `backend/.python-version` selects Python 3.12.
 
-```bash
-git init
-git add .
-git commit -m "Prepare NeuroSim Lab for Vercel"
-git branch -M main
-git remote add origin https://github.com/<YOUR_USERNAME>/neurosim-lab.git
-git push -u origin main
-```
+### Deploy
 
-If the repository is already initialized or has a remote, keep the existing history and push the deployment changes normally. Never commit `.env.local`, `.venv`, `node_modules`, or datasets.
+1. Commit and push `vercel.json` and the other repository files to GitHub. If Git is not set up yet, create an empty GitHub repository and run these commands from the repository root:
 
-### 2. Import the backend project first
+   ```bash
+   git init
+   git add .
+   git commit -m "Configure Vercel Services"
+   git branch -M main
+   git remote add origin https://github.com/<YOUR_USERNAME>/neurosim-lab.git
+   git push -u origin main
+   ```
 
-In the Vercel dashboard, choose **Add New → Project**, import the GitHub repository, set **Root Directory** to `backend`, and select the **FastAPI** framework preset. Leave build command and output directory at their defaults; do not use `uvicorn` as a production start command. Vercel detects the canonical `app` in `backend/app/main.py` and reads `backend/requirements.txt`. The `backend/.python-version` file selects Python 3.12, which Vercel supports. No environment variables are required for Phase 1. Deploy and record the public HTTPS backend origin, for example `https://YOUR-BACKEND.vercel.app`. Ensure deployment protection does not block public testing.
+   If this repository already has a remote, commit and push normally rather than running `git init` or adding another remote.
 
-Verify directly:
+2. In the Vercel Dashboard, import the repository as **one project**. Select **Services** as Framework Preset and leave Root Directory at `./` (repository root). Do not set a root-level build command or output directory; each service builds from its own root.
+3. The detected services should be `frontend` (Next.js, root `frontend/`) and `backend` (FastAPI, root `backend/`). The public routing should show the backend for `/api/(.*)` and frontend for `/(.*)`. No `API_UPSTREAM_URL` or `NEXT_PUBLIC_API_URL` is required on Vercel. Remove any old production `API_UPSTREAM_URL` value from the earlier two-project setup.
+4. Deploy, then use the **single deployment domain** for all checks below.
 
-- `https://YOUR-BACKEND.vercel.app/api/health` returns JSON with `status: ok`.
-- `https://YOUR-BACKEND.vercel.app/api/demo` returns `kind: synthetic_demo`.
-- `https://YOUR-BACKEND.vercel.app/api/dandi/search?q=electrophysiology` returns public metadata or a clear 503 if DANDI is unavailable.
-- POST `https://YOUR-BACKEND.vercel.app/api/lif` with JSON `{}` returns `kind: simulation`.
+### Verify
 
-### 3. Import the frontend project
+- `https://<deployment-domain>/` loads the homepage.
+- `https://<deployment-domain>/api/health` returns JSON with `status: ok` and `service: NeuroSim Lab API`.
+- `https://<deployment-domain>/api/demo` returns `kind: synthetic_demo`.
+- `https://<deployment-domain>/api/dandi/search?q=electrophysiology` returns public DANDI metadata, or a clear 503 if DANDI is temporarily unavailable.
+- POST `https://<deployment-domain>/api/lif` with JSON `{}` returns `kind: simulation`:
 
-Import the **same** GitHub repository again as a second Vercel project. Set **Root Directory** to `frontend`, choose **Next.js**, and leave install, build, and output settings at their defaults. Add one **server-side** environment variable for Production (and Preview if desired):
+  ```powershell
+  Invoke-RestMethod -Method Post -Uri 'https://<deployment-domain>/api/lif' -ContentType 'application/json' -Body '{}'
+  ```
 
-```text
-API_UPSTREAM_URL=https://YOUR-BACKEND.vercel.app
-```
+Check the browser's Network tab: its API requests should use the same deployment domain at `/api/...`, never localhost or `/api/backend/api/...`.
 
-Use only the origin: no `/api` suffix or trailing path. Redeploy the frontend after setting or changing this variable. The build deliberately fails on Vercel if it is absent or uses HTTP. Do not set `NEXT_PUBLIC_API_URL`; the browser calls relative `/api/*` URLs. The rewrite forwards them to the backend's matching `/api/*` paths. Because browser requests stay on the frontend origin, production CORS permissions are unnecessary. FastAPI's existing CORS allowlist remains limited to local development origins.
+### Local development
 
-### 4. Verify the public site
+The plain local setup still uses two processes: Uvicorn on `localhost:8000` and Next.js on `localhost:3000`. Outside Vercel, `frontend/next.config.ts` rewrites relative `/api/*` calls to the local backend. `frontend/.env.example` shows the optional local-only `API_UPSTREAM_URL`; the default is `http://localhost:8000`. Vercel's Services routing owns API paths in production, so the Next.js rewrite is disabled there. You may also use `vercel dev -L` from the repository root to exercise both services with Vercel's local router, provided a compatible Python is installed.
 
-On the frontend deployment, open:
-
-- `https://YOUR-FRONTEND.vercel.app/` — homepage.
-- `https://YOUR-FRONTEND.vercel.app/api/health` — same backend health JSON through the rewrite.
-- `https://YOUR-FRONTEND.vercel.app/api/demo` — labeled synthetic data.
-- `https://YOUR-FRONTEND.vercel.app/api/dandi/search?q=electrophysiology` — DANDI metadata search.
-
-Run a LIF request through the frontend domain:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri 'https://YOUR-FRONTEND.vercel.app/api/lif' -ContentType 'application/json' -Body '{}'
-```
-
-Check the browser's Network tab: application API requests should target the frontend domain at `/api/...`, never `localhost`.
-
-### Local development and troubleshooting
-
-For local development, start Uvicorn on port 8000 and Next.js on port 3000. `frontend/.env.example` shows the optional `API_UPSTREAM_URL=http://localhost:8000`; without it, the rewrite uses that local default outside Vercel. Install local Python tools with `pip install -r backend/requirements-dev.txt`. Local Python 3.11+ works; Vercel uses 3.12.
-
-If the frontend deployment fails during configuration, set `API_UPSTREAM_URL` to the backend's **public HTTPS origin**. A 404 under `/api/*` usually means the backend project was imported with the wrong Root Directory or is not deployed. A 401/403 from the upstream may mean Vercel deployment protection is enabled. A 502/503 can indicate backend startup, function timeout, or a temporary DANDI error; inspect the backend deployment's Function Logs. The backend has no persistent filesystem, background worker, or global experiment state. Each LIF simulation runs in one request. The Python function must fit Vercel's bundle and duration limits; Phase 1 keeps only FastAPI, NumPy, and HTTPX as runtime dependencies. Preview frontend deployments point at whichever backend origin is configured for Preview; they do not automatically pair with a matching backend preview deployment.
+If deployment still shows `/api/backend`, confirm Vercel is building the latest commit from the repository root with Framework Preset **Services**, and confirm that the root `vercel.json` is included. A backend 500 indicates a FastAPI startup or dependency error; inspect the backend service logs. DANDI is an external public API and may occasionally return a 503. No NWB assets are bundled or downloaded.
 ## References
 
 - [DANDI Archive](https://dandiarchive.org/)

@@ -2,6 +2,8 @@
 
 An interactive computational neuroscience playground. Phase 1 includes a leaky integrate-and-fire (LIF) simulator, a labeled synthetic spike demo, and live DANDI metadata search. No biological recording is bundled or implied by the demo.
 
+The platform now also documents a nine-level learning and research roadmap. The `/research-vision` page separates measurable science, research hypotheses, and long-term concepts involving epilepsy research, wearable signals, computational forecasting, and olfactory neuromodulation. It makes no clinical efficacy claim.
+
 ## Scientific motivation
 
 The project pairs reproducible computational experiments with a path toward analysis of public neurophysiology. It is a self-study and research portfolio, not biological validation of a model.

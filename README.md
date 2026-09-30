@@ -1,6 +1,6 @@
 # NeuroSim Lab
 
-An interactive computational neuroscience playground. Phase 1 includes a leaky integrate-and-fire (LIF) simulator, a labeled synthetic spike demo, and live DANDI metadata search. No biological recording is bundled or implied by the demo.
+An interactive computational neuroscience playground. Phase 2 adds a seeded excitatory-inhibitory LIF Neural Network Lab alongside the existing Single Neuron Lab, labeled synthetic spike demo, and live DANDI metadata search. No biological recording is bundled or implied by the demo.
 
 The platform now also documents a nine-level learning and research roadmap. The `/research-vision` page separates measurable science, research hypotheses, and long-term concepts involving epilepsy research, wearable signals, computational forecasting, and olfactory neuromodulation. It makes no clinical efficacy claim.
 
@@ -13,7 +13,7 @@ The project pairs reproducible computational experiments with a path toward anal
 | Directory | Purpose |
 | --- | --- |
 | `frontend/` | Next.js, TypeScript, Tailwind CSS, Plotly views |
-| `backend/` | FastAPI, NumPy LIF simulation, spike statistics, DANDI provider |
+| `backend/` | FastAPI, NumPy single-neuron LIF, Brian2 E/I network, spike statistics, DANDI provider |
 | `tests/` | Python scientific and API tests |
 | `docs/` | Methods, data access, reproducibility |
 | `data/` | Placeholder; no recordings committed |
@@ -23,7 +23,7 @@ The frontend calls the backend over HTTP. The backend keeps real metadata, deriv
 
 ## Installation and running
 
-Requires Python 3.11+ and Node.js 20+.
+Use Python 3.12 (production baseline) or Python 3.13 (local compatibility), and Node.js 20+. The supported Python policy is >=3.12,<3.14; `backend/.python-version` remains 3.12.
 
 Backend, from repository root:
 
@@ -31,7 +31,7 @@ Backend, from repository root:
 python -m venv .venv
 # Activate .venv for your shell, then:
 pip install -r backend/requirements-dev.txt
-uvicorn backend.app.main:app --reload --port 8000
+python -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
 Frontend, in a second terminal:
@@ -55,6 +55,14 @@ npm run typecheck
 npm run build
 ```
 
+## Neural Network Lab (Level 2)
+
+Open the Network Lab after the Single Neuron Lab. Run the 100-neuron (80 E / 20 I) default, then vary connectivity, composition, synaptic weights, drive, duration, or seed. Outputs are explicitly **SIMULATED**: E/I spike raster, population firing rates, summary metrics, and a documented population-rate CV proxy. High synchronization is not automatically pathological.
+
+The endpoint is `POST /api/network`; `{}` uses defaults. Default duration is 500 ms, connection probability 0.1, excitatory weight 0.5 mV, inhibitory magnitude 2 mV, external drive 22 mV, and seed 42. The simulator is Brian2 2.10.1 with a NumPy runtime and fixed 0.2 ms step. See [API schema and limits](docs/network-api.md), [methodology](docs/methodology.md), [reproducibility](docs/reproducibility.md), and the [Phase 2 verification report](docs/phase2-report.md).
+
+Levels 1 and 2 are implemented. Level 3, Epilepsy Dynamics, is the **next development stage**, not an implemented module. No seizure classification, pathological mode, EEG model, or intervention is included.
+
 ## Data sources
 
 Live public metadata comes from the [DANDI Archive REST API](https://docs.dandiarchive.org/api/rest-api/). Search queries the Dandiset list and up to five version metadata records; it never fetches assets. Search results link to their original Dandiset page. Phase 1 does not retrieve NWB assets, recording traces, or real spike timestamps. The synthetic demo uses a fixed seed and is always labeled synthetic. See [data sources](docs/data-sources.md).
@@ -69,11 +77,11 @@ LIF requests and responses carry parameters, seed, duration, model name, and sof
 
 ## Limitations
 
-LIF neurons are simplified. Synthetic Poisson trains are not observations. DANDI metadata alone does not reveal whether an asset contains usable spike timestamps; that requires NWB inspection in a later phase. Network, STDP, comparison, and export modules are planned for later phases.
+LIF neurons are simplified. Synthetic Poisson trains are not observations. DANDI metadata alone does not reveal whether an asset contains usable spike timestamps; that requires NWB inspection in a later phase. The implemented network is an educational E/I model, not a biological recording or complete cortical circuit. STDP, recording-level comparison, and exports remain future work.
 
 ## Future work
 
-Phase 2: Brian2 network and pair-based STDP. Phase 3: a small public NWB example, comparison of selected statistics, and experiment export. Phase 4: accessibility and polish.
+Phase 2 implements the basic Brian2 E/I network. Phase 3 will investigate Epilepsy Dynamics, with its scientific scope and validation defined separately. Plasticity, real-recording analysis, comparison, and exports remain future work; none are implemented automatically.
 
 ## Deployment
 
@@ -111,6 +119,7 @@ The first matching top-level rewrite wins. Vercel passes the original URL path t
 - `https://<deployment-domain>/api/health` returns JSON with `status: ok` and `service: NeuroSim Lab API`.
 - `https://<deployment-domain>/api/demo` returns `kind: synthetic_demo`.
 - `https://<deployment-domain>/api/dandi/search?q=electrophysiology` returns public DANDI metadata, or a clear 503 if DANDI is temporarily unavailable.
+- POST `https://<deployment-domain>/api/network` with JSON `{}` returns `kind: simulation`, spike events, population rates, and network metadata. Validate cold-start timing and dependency bundle size in a preview deployment.
 - POST `https://<deployment-domain>/api/lif` with JSON `{}` returns `kind: simulation`:
 
   ```powershell

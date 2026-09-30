@@ -1,4 +1,6 @@
-from fastapi.testclient import TestClient
+import asyncio
+
+import httpx
 
 from backend.app.main import app
 from backend.app.science import LIFParameters, simulate_lif, spike_statistics, synthetic_demo
@@ -30,6 +32,8 @@ def test_demo_is_deterministic_and_labeled() -> None:
 
 
 def test_api_validation() -> None:
-    client = TestClient(app)
-    assert client.get("/api/health").status_code == 200
-    assert client.post("/api/lif", json={"v_threshold_mv": -80}).status_code == 422
+    async def check() -> None:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            assert (await client.get("/api/health")).status_code == 200
+            assert (await client.post("/api/lif", json={"v_threshold_mv": -80})).status_code == 422
+    asyncio.run(check())

@@ -2,8 +2,11 @@
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
+from time import perf_counter
 import httpx
 
+from .network import NetworkBusyError, NetworkParameters, NetworkResult, NetworkRuntimeError, initialize_network_engine, simulate_network
 from .providers import DandiProvider, DatasetMetadata
 from .science import DemoResult, LIFParameters, LIFResult, VERSION, simulate_lif, synthetic_demo
 
@@ -39,3 +42,13 @@ async def dandi_search(q: str = Query(min_length=2, max_length=80)) -> list[Data
         return await provider.search_metadata(q)
     except (httpx.HTTPError, ValueError, KeyError) as exc:
         raise HTTPException(status_code=503, detail="DANDI metadata is temporarily unavailable") from exc
+
+
+@app.post("/api/network", response_model=NetworkResult)
+async def network(parameters: NetworkParameters) -> NetworkResult:
+    started = perf_counter()
+    initialize_network_engine()
+    try:
+        return await run_in_threadpool(simulate_network, parameters, started)
+    except (NetworkBusyError, NetworkRuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc), headers={"Retry-After": "2"}) from exc

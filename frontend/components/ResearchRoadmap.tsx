@@ -23,15 +23,15 @@ export const roadmapLevels: RoadmapLevel[] = [
   {
     level: 2,
     title: "Neural Network",
-    status: "Next Development Stage",
+    status: "Implemented",
     learn: "Synapses, connectivity, excitation, inhibition, and E/I balance.",
-    model: "Planned: LIF network initially, with possible future AdEx or Izhikevich models.",
+    model: "Seeded recurrent excitatory-inhibitory LIF network using Brian2.",
     connection: "How can interactions among neurons produce population-level dynamics?",
   },
   {
     level: 3,
     title: "Epilepsy Dynamics",
-    status: "Planned",
+    status: "Next Development Stage",
     learn: "Network excitability, synchronization, bursting, and seizure-like transitions.",
     connection: "How can a stable network transition toward pathological synchronization?",
   },
@@ -86,7 +86,7 @@ export function ProgressionStrip() {
     <ol aria-label="Learning progression" className="flex flex-wrap items-center gap-2">
       {roadmapLevels.slice(0, 6).map((item, index) => (
         <li key={item.level} className="flex items-center gap-2">
-          <span className={item.level === 1 ? "rounded border border-mint/50 bg-mint/10 px-3 py-2 text-xs font-semibold text-mint" : "rounded border border-line px-3 py-2 text-xs text-muted"}>
+          <span className={item.status === "Implemented" ? "rounded border border-mint/50 bg-mint/10 px-3 py-2 text-xs font-semibold text-mint" : "rounded border border-line px-3 py-2 text-xs text-muted"}>
             {item.title}
           </span>
           {index < 5 && <span aria-hidden="true" className="text-line">-&gt;</span>}

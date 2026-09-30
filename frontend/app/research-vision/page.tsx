@@ -27,6 +27,7 @@ export default function ResearchVisionPage() {
           <Link href="/" className="mr-auto text-lg font-bold text-mint">NeuroSim Lab</Link>
           <Link href="/#real-data" className="text-sm text-muted hover:text-white">Real Data</Link>
           <Link href="/#neuron-lab" className="text-sm text-muted hover:text-white">Neuron Lab</Link>
+          <Link href="/#network-lab" className="text-sm text-muted hover:text-white">Network Lab</Link>
           <Link href="/research-vision" aria-current="page" className="text-sm font-semibold text-white">Research Vision</Link>
           <Link href="/#about" className="text-sm text-muted hover:text-white">About</Link>
         </nav>
@@ -69,7 +70,7 @@ export default function ResearchVisionPage() {
         <section id="roadmap" className="mx-auto max-w-7xl scroll-mt-24 px-6 py-20">
           <p className="label">Nine levels</p>
           <h2 className="section-title mt-3">Learning + Research Roadmap</h2>
-          <p className="mt-3 mb-9 max-w-3xl text-muted">Each level adds a scientific concept and a research question. Only Level 1 is currently implemented as an interactive model.</p>
+          <p className="mt-3 mb-9 max-w-3xl text-muted">Each level adds a scientific concept and a research question. Levels 1 and 2 are implemented as interactive models. Level 3, Epilepsy Dynamics, is the next development stage and remains planned.</p>
           <ResearchRoadmap />
         </section>
       </main>

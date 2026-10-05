@@ -1,6 +1,6 @@
 # NeuroSim Lab
 
-An interactive computational neuroscience playground. Phase 2 adds a seeded excitatory-inhibitory LIF Neural Network Lab alongside the existing Single Neuron Lab, labeled synthetic spike demo, and live DANDI metadata search. No biological recording is bundled or implied by the demo.
+An interactive computational neuroscience playground. Phase 3 adds matched network-state experiments and automatic default network loading alongside the existing Single Neuron Lab, labeled synthetic spike demo, and live DANDI metadata search. No biological recording is bundled or implied by the demo.
 
 The platform now also documents a nine-level learning and research roadmap. The `/research-vision` page separates measurable science, research hypotheses, and long-term concepts involving epilepsy research, wearable signals, computational forecasting, and olfactory neuromodulation. It makes no clinical efficacy claim.
 
@@ -57,11 +57,31 @@ npm run build
 
 ## Neural Network Lab (Level 2)
 
-Open the Network Lab after the Single Neuron Lab. Run the 100-neuron (80 E / 20 I) default, then vary connectivity, composition, synaptic weights, drive, duration, or seed. Outputs are explicitly **SIMULATED**: E/I spike raster, population firing rates, summary metrics, and a documented population-rate CV proxy. High synchronization is not automatically pathological.
+Open the Network Lab after the Single Neuron Lab. The exact 100-neuron (80 E / 20 I) default loads automatically; then vary connectivity, composition, synaptic weights, drive, duration, or seed. Outputs are explicitly **SIMULATED**: E/I spike raster, population firing rates, summary metrics, and a documented population-rate CV proxy. High synchronization is not automatically pathological.
 
 The endpoint is `POST /api/network`; `{}` uses defaults. Default duration is 500 ms, connection probability 0.1, excitatory weight 0.5 mV, inhibitory magnitude 2 mV, external drive 22 mV, and seed 42. The simulator is Brian2 2.10.1 with a NumPy runtime and fixed 0.2 ms step. See [API schema and limits](docs/network-api.md), [methodology](docs/methodology.md), [reproducibility](docs/reproducibility.md), and the [Phase 2 verification report](docs/phase2-report.md).
 
-Levels 1 and 2 are implemented. Level 3, Epilepsy Dynamics, is the **next development stage**, not an implemented module. No seizure classification, pathological mode, EEG model, or intervention is included.
+Levels 1, 2, and 3 are implemented. Level 4, **Real EEG**, is the next development stage. No seizure classification, pathological mode, EEG model, or intervention is included.
+
+## Epilepsy Dynamics (Level 3)
+
+Compare the **Reference Network** with a controlled experimental condition using
+the unchanged Phase 2 LIF simulator. Four controls vary excitatory strength,
+inhibitory strength, connectivity, and external drive. Presets display exact
+one-parameter changes. Matched rasters and E/I rates, a metric comparison table,
+and 5 ms distinct-neuron participation show measured effects without assuming
+a particular outcome. Population-rate CV is retained.
+
+The new POST /api/network/compare endpoint accepts those four optional fields;
+{} runs the exact reference once. Both labs share this initial request. Manual
+Phase 2 runs keep the existing API. Comparison size, composition, duration, and
+seed are fixed to the original defaults, with matched noise and initial voltages.
+
+This is **SIMULATED NETWORK DYNAMICS**. High firing or synchronization does not
+establish a biological seizure. No intrinsic bursting model, burst classifier,
+seizure score, or clinical prediction is introduced. See the
+[Phase 3 report](docs/phase3-report.md) for files, benchmarks, verification, and
+limitations, and [methodology](docs/methodology.md) for exact metric definitions.
 
 ## Data sources
 
@@ -81,7 +101,7 @@ LIF neurons are simplified. Synthetic Poisson trains are not observations. DANDI
 
 ## Future work
 
-Phase 2 implements the basic Brian2 E/I network. Phase 3 will investigate Epilepsy Dynamics, with its scientific scope and validation defined separately. Plasticity, real-recording analysis, comparison, and exports remain future work; none are implemented automatically.
+Phase 3 implements controlled comparisons of the Phase 2 Brian2 E/I network. Phase 4, Real EEG, is next: real epilepsy electrophysiology and carefully justified model-data comparison. Plasticity, forecasting, interventions, and exports remain future work; none are implemented automatically.
 
 ## Deployment
 

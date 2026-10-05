@@ -4,39 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Data } from "plotly.js";
 import Chart from "./Chart";
 
-type Parameters = {
-  neuron_count: number;
-  excitatory_fraction: number;
-  connection_probability: number;
-  excitatory_weight_mv: number;
-  inhibitory_weight_mv: number;
-  external_drive_mv: number;
-  duration_ms: number;
-  seed: number;
-};
-type Result = {
-  kind: "simulation";
-  model_name: string;
-  engine_version: string;
-  execution_time_ms: number;
-  parameters: Parameters;
-  populations: {
-    neuron_count: number; excitatory_count: number; inhibitory_count: number;
-    connection_count: number; actual_excitatory_fraction: number;
-  };
-  spike_times_ms: number[];
-  neuron_indices: number[];
-  rates: { bin_width_ms: number; time_ms: number[]; excitatory_hz: number[]; inhibitory_hz: number[]; total_hz: number[] };
-  summary: {
-    total_spikes: number; mean_firing_rate_hz: number; excitatory_mean_firing_rate_hz: number;
-    inhibitory_mean_firing_rate_hz: number; population_rate_cv: number | null;
-  };
-};
-const defaults: Parameters = {
-  neuron_count: 100, excitatory_fraction: 0.8, connection_probability: 0.1,
-  excitatory_weight_mv: 0.5, inhibitory_weight_mv: 2, external_drive_mv: 22, duration_ms: 500, seed: 42,
-};
-const controls: { key: keyof Parameters; label: string; unit: string; min: number; max: number; step: number; help: string }[] = [
+import { defaults, loadBaseline, runNetwork, type Parameters, type Result } from "./network-client";
+export const controls: { key: keyof Parameters; label: string; unit: string; min: number; max: number; step: number; help: string }[] = [
   { key: "neuron_count", label: "Network size", unit: "neurons", min: 20, max: 200, step: 1, help: "The number of simulated neurons in the network. This is a computational model size, not the number of neurons in a biological brain region." },
   { key: "excitatory_fraction", label: "Excitatory fraction", unit: "0-1", min: 0.5, max: 0.9, step: 0.01, help: "Excitatory neurons increase the probability that connected neurons will fire. Inhibitory neurons reduce the probability that connected neurons will fire." },
   { key: "connection_probability", label: "Connection probability", unit: "0-1", min: 0, max: 0.3, step: 0.01, help: "Higher connectivity allows activity to spread through more pathways in the simulated network. Self-connections are excluded." },
@@ -55,7 +24,7 @@ const learning = [
 ];
 const number = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
-function NetworkResults({ result }: { result: Result }) {
+export function NetworkResults({ result, rateRange }: { result: Result; rateRange?: [number, number] }) {
   const { parameters: p, populations: pop, summary: s, rates } = result;
   const raster = useMemo<Data[]>(() => {
     const ex: number[] = [], ey: number[] = [], ix: number[] = [], iy: number[] = [];
@@ -91,7 +60,7 @@ function NetworkResults({ result }: { result: Result }) {
     <div className="card p-5">
       <p className="label">Simulated population activity</p><h3 className="mt-2 font-semibold">Population firing rate</h3>
       <p className="mt-2 text-sm leading-relaxed text-muted">Population firing rate summarizes how many neurons are active over time. Each trace is normalized by its population size, in non-overlapping {rates.bin_width_ms} ms bins.</p>
-      <Chart data={rateData} yTitle="Rate / neuron (Hz)" showLegend xRange={xRange} />
+      <Chart data={rateData} yTitle="Rate / neuron (Hz)" showLegend xRange={xRange} yRange={rateRange} />
     </div>
     <dl className="grid grid-cols-2 gap-3 xl:grid-cols-4">{metrics.map(([label, value]) => <div className="card p-4" key={label}><dt className="text-xs text-muted">{label}</dt><dd className="mt-2 text-lg font-bold text-mint">{value}</dd></div>)}</dl>
     <div className="card p-5">
@@ -108,10 +77,18 @@ export default function NetworkLab() {
   // Strings preserve empty/partial edits, so clearing a field cannot silently become zero.
   const [values, setValues] = useState<Record<keyof Parameters, string>>(() => Object.fromEntries(Object.entries(defaults).map(([k, v]) => [k, String(v)])) as Record<keyof Parameters, string>);
   const [result, setResult] = useState<Result | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const pending = useRef<AbortController | null>(null);
-  useEffect(() => () => pending.current?.abort(), []);
+  const pending = useRef(false);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    let active = true;
+    void loadBaseline().then(data => { if (active) setResult(data.reference.network); })
+      .catch(e => { if (active) setError(e instanceof Error ? e.message : "Could not load baseline."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; mounted.current = false; };
+  }, []);
   const params = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, Number(v)])) as Parameters;
   const exceedsBudget = params.neuron_count * params.duration_ms > 100000;
   const changed = result && controls.some(({ key }) => params[key] !== result.parameters[key]);
@@ -119,25 +96,16 @@ export default function NetworkLab() {
 
   async function run() {
     if (pending.current) return;
-    const controller = new AbortController();
-    pending.current = controller;
+    pending.current = true;
     setLoading(true); setError("");
-    const timeout = setTimeout(() => controller.abort(), 30000);
     try {
-      const response = await fetch("/api/network", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(params), signal: controller.signal });
-      if (!response.ok) {
-        if (response.status === 422) throw new Error("Check the parameter ranges and the 100,000 neuron-ms limit.");
-        if (response.status === 503) {
-          const body = await response.json().catch(() => null);
-          throw new Error(typeof body?.detail === "string" ? body.detail : "The network simulator is busy. Please retry shortly.");
-        }
-        throw new Error("The network simulation service is unavailable. Please try again.");
-      }
-      setResult(await response.json());
+      const next = await runNetwork(params);
+      if (mounted.current) setResult(next);
     } catch (e) {
-      setError(controller.signal.aborted ? "The request timed out. Try a smaller network or retry shortly." : e instanceof Error ? e.message : "Could not run the network simulation.");
+      if (mounted.current) setError(e instanceof Error ? e.message : "Could not run the network simulation.");
     } finally {
-      clearTimeout(timeout); pending.current = null; setLoading(false);
+      pending.current = false;
+      if (mounted.current) setLoading(false);
     }
   }
 
@@ -196,8 +164,9 @@ export default function NetworkLab() {
         </div>
       </details>
       <aside className="mt-8 rounded-xl border border-line p-6">
-        <p className="label">Next Stage &mdash; Epilepsy Dynamics &middot; Planned</p>
-        <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted">When excitation, inhibition, connectivity, or synchronization change, network dynamics may shift into qualitatively different states. The next research stage will investigate how such transitions relate to seizure-like dynamics.</p>
+        <p className="label">Continue to Level 3 &mdash; Epilepsy Dynamics &middot; Implemented</p>
+        <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted">When excitation, inhibition, connectivity, or synchronization change, network dynamics may shift into qualitatively different states. Compare matched computational experiments in the Epilepsy Dynamics Lab below.</p>
+        <a href="#epilepsy-dynamics" className="mt-3 inline-block text-mint underline">Explore network state transitions &rarr;</a>
       </aside>
     </div>
   </section>;

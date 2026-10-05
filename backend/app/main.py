@@ -7,6 +7,7 @@ from time import perf_counter
 import httpx
 
 from .network import NetworkBusyError, NetworkParameters, NetworkResult, NetworkRuntimeError, initialize_network_engine, simulate_network
+from .dynamics import ComparisonResult, ExperimentParameters, compare_network
 from .providers import DandiProvider, DatasetMetadata
 from .science import DemoResult, LIFParameters, LIFResult, VERSION, simulate_lif, synthetic_demo
 
@@ -50,5 +51,15 @@ async def network(parameters: NetworkParameters) -> NetworkResult:
     initialize_network_engine()
     try:
         return await run_in_threadpool(simulate_network, parameters, started)
+    except (NetworkBusyError, NetworkRuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc), headers={"Retry-After": "2"}) from exc
+
+
+@app.post("/api/network/compare", response_model=ComparisonResult)
+async def network_comparison(parameters: ExperimentParameters) -> ComparisonResult:
+    started = perf_counter()
+    initialize_network_engine()
+    try:
+        return await run_in_threadpool(compare_network, parameters, started)
     except (NetworkBusyError, NetworkRuntimeError) as exc:
         raise HTTPException(status_code=503, detail=str(exc), headers={"Retry-After": "2"}) from exc

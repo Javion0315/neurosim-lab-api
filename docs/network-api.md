@@ -50,3 +50,45 @@ See `/docs` or `/openapi.json` on the backend for generated schemas. CV is JSON 
 - Existing Vercel Services routing stays intact: `/api/(.*)` reaches the backend first, and frontend paths follow. No new service or routing prefix is needed.
 
 Local performance is not a Vercel SLA. Confirm cold starts, function bundle size, installed scientific dependencies, memory, and concurrency in a Vercel preview before production promotion. The test environment does not establish hosted Linux performance. Brian2/SymPy/Cython increase the Python dependency footprint even though the NumPy runtime does not compile code.
+
+
+## Phase 3 comparison endpoint
+
+POST /api/network/compare accepts an object with only the four optional
+experimental fields below. Empty body object {} means the Reference preset.
+The original POST /api/network request and response contract is unchanged.
+
+| Field | Default | Allowed |
+| --- | --- | --- |
+| excitatory_weight_mv | 0.5 | 0 to 2 mV |
+| inhibitory_weight_mv | 2 | 0 to 8 mV, positive magnitude |
+| connection_probability | 0.1 | 0 to 0.3 |
+| external_drive_mv | 22 | 0 to 40 mV |
+
+For example: {"excitatory_weight_mv": 0.75}. Unknown fields (including seed,
+size, fraction, and duration) and non-finite or out-of-range values return 422.
+Both conditions fix size=100, fraction=0.8, duration=500, seed=42.
+
+Response: kind="simulation", reference and experimental Condition objects,
+changes (parameter/reference/experimental triples for actual differences only),
+fixed_conditions explanation, and execution_time_ms for the entire pair.
+Each Condition contains network (the unchanged Phase 2 NetworkResult) and
+coordination (bin_width_ms, active_fraction, mean_active_fraction,
+peak_active_fraction, definition). All activity is simulated. For identical
+conditions the simulator executes once; both fields contain that result.
+
+The existing lock is held across both simulations. Overlapping network or
+comparison work returns 503 and Retry-After: 2. The existing cooperative
+10-second budget includes both simulations and metric processing, with at most
+100,000 neuron-ms total. Cold initialization is included in the endpoint timer
+but cannot be interrupted mid-import. Response serialization and network transfer
+are outside the cooperative simulator deadline.
+
+Maximum theoretical combined spikes are approximately 50,000 (two 100-neuron,
+500 ms runs with 2 ms refractoriness); actual bounded stress payloads are measured
+in the Phase 3 report. There are 100 rate/participation bins per condition and no
+voltage histories or connectivity matrices in the payload.
+
+The initial frontend baseline uses this endpoint with {} and one shared promise.
+Manual Phase 2 requests still use /api/network. No routing changes or new frontend
+API origin are needed. See methodology.md for definitions and reproducibility.

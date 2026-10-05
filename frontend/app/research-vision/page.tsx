@@ -70,7 +70,7 @@ export default function ResearchVisionPage() {
         <section id="roadmap" className="mx-auto max-w-7xl scroll-mt-24 px-6 py-20">
           <p className="label">Nine levels</p>
           <h2 className="section-title mt-3">Learning + Research Roadmap</h2>
-          <p className="mt-3 mb-9 max-w-3xl text-muted">Each level adds a scientific concept and a research question. Levels 1 and 2 are implemented as interactive models. Level 3, Epilepsy Dynamics, is the next development stage and remains planned.</p>
+          <p className="mt-3 mb-9 max-w-3xl text-muted">Each level adds a scientific concept and a research question. Levels 1, 2, and 3 are implemented as interactive models. Level 4, Real EEG, is the next development stage.</p>
           <ResearchRoadmap />
         </section>
       </main>

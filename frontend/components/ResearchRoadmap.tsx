@@ -31,14 +31,14 @@ export const roadmapLevels: RoadmapLevel[] = [
   {
     level: 3,
     title: "Epilepsy Dynamics",
-    status: "Next Development Stage",
+    status: "Implemented",
     learn: "Network excitability, synchronization, bursting, and seizure-like transitions.",
-    connection: "How can a stable network transition toward pathological synchronization?",
+    connection: "How do controlled parameter changes alter simulated activity and temporal coordination?",
   },
   {
     level: 4,
     title: "Real EEG",
-    status: "Planned",
+    status: "Next Development Stage",
     learn: "Interictal, pre-ictal, ictal, and post-ictal states. Future data sources may include public epilepsy EEG datasets.",
     connection: "Can measurable changes in real EEG be compared with simulated network dynamics?",
   },
@@ -97,7 +97,7 @@ export function ProgressionStrip() {
 }
 
 export default function ResearchRoadmap({ compact = false }: { compact?: boolean }) {
-  const levels = compact ? roadmapLevels.slice(0, 3) : roadmapLevels;
+  const levels = compact ? roadmapLevels.slice(0, 4) : roadmapLevels;
   return (
     <div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

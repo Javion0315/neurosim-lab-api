@@ -209,7 +209,7 @@ async function auditEmptyFields(scope) {
     const dimensions = await selector.evaluate(n => ({ width: n.clientWidth, scroll: n.scrollWidth, card: n.querySelector("a").getBoundingClientRect().width }));
     assert(dimensions.scroll > dimensions.width);
     assert(dimensions.card >= 220 && dimensions.card < dimensions.width, "readable card with next-card peek");
-    assert.equal(await selector.getByRole("button", { name: /Real EEG/ }).isDisabled(), true);
+    assert.equal(await selector.getByRole("button", { name: /Seizure Forecasting/ }).isDisabled(), true);
     assert(await deep.getByText("Swipe or scroll to explore labs", { exact: false }).isVisible());
     await deep.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth);
     if (process.env.SCREENSHOT_PATH) await deep.screenshot({ path: process.env.SCREENSHOT_PATH });

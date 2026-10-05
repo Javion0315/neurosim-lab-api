@@ -38,14 +38,14 @@ export const roadmapLevels: RoadmapLevel[] = [
   {
     level: 4,
     title: "Real EEG",
-    status: "Next Development Stage",
-    learn: "Interictal, pre-ictal, ictal, and post-ictal states. Future data sources may include public epilepsy EEG datasets.",
+    status: "Implemented",
+    learn: "Real CHB-MIT scalp EEG, dataset seizure annotations, descriptive features and Welch spectra.",
     connection: "Can measurable changes in real EEG be compared with simulated network dynamics?",
   },
   {
     level: 5,
     title: "Seizure Forecasting",
-    status: "Planned",
+    status: "Next Development Stage",
     learn: "Feature extraction, time-series analysis, machine learning, and uncertainty.",
     connection: "Can patient-specific signals identify increasing seizure risk before onset?",
   },

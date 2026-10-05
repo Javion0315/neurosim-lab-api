@@ -7,11 +7,15 @@ import DynamicsLab, { reference } from "./DynamicsLab";
 import { defaults, loadBaseline, runComparison, runNetwork, type Experiment, type Comparison } from "./network-client";
 import { useLabSession } from "./useLabSession";
 
-type LabId = "single-neuron" | "network-lab" | "epilepsy-dynamics";
+import EEGLab from "./EEGLab";
+import { eegDefaults, loadEEG, runEEG } from "./eeg-client";
+
+type LabId = "single-neuron" | "network-lab" | "epilepsy-dynamics" | "real-eeg";
 const labs: { id: LabId; level: string; name: string; description: string }[] = [
   { id: "single-neuron", level: "01", name: "Single Neuron", description: "Start with membrane potential and spikes." },
   { id: "network-lab", level: "02", name: "Neural Network", description: "Explore interacting excitatory and inhibitory neurons." },
   { id: "epilepsy-dynamics", level: "03", name: "Epilepsy Dynamics", description: "Compare simulated network states." },
+  { id: "real-eeg", level: "04", name: "Real EEG", description: "Explore real scalp EEG and dataset annotations." },
 ];
 function resolveHash(hash: string): LabId | null {
   if (hash === "" || hash === "#neuron-lab" || hash === "#single-neuron") return "single-neuron";
@@ -43,6 +47,7 @@ export default function LabWorkspace() {
   const neuron = useLabSession(initial, loadNeuronBaseline, runNeuron);
   const network = useLabSession(defaults, loadNetworkBaseline, runNetwork);
   const dynamics = useLabSession<Experiment, Comparison>(reference, loadBaseline, runComparison);
+  const eeg = useLabSession(eegDefaults, loadEEG, runEEG);
   useEffect(() => {
     if (!active || !window.location.hash || !resolveHash(window.location.hash)) return;
     const frame = requestAnimationFrame(() => {
@@ -61,7 +66,7 @@ export default function LabWorkspace() {
       <h2 id="explore-labs-title" className="section-title mt-3">Explore NeuroSim Lab</h2>
       <p className="mt-3 max-w-3xl text-muted">Select a lab to begin. Start with Single Neuron, then explore networks and compare their dynamics. Your drafts and results stay available when you switch labs on this page.</p>
       <p className="mt-4 text-sm text-mint lg:hidden">Swipe or scroll to explore labs &rarr;</p>
-      <nav aria-label="Lab selector" className="mt-4 flex snap-x gap-4 overflow-x-auto pb-4 pt-1 lg:grid lg:grid-cols-4 lg:overflow-visible">
+      <nav aria-label="Lab selector" className="mt-4 flex snap-x gap-4 overflow-x-auto pb-4 pt-1 lg:grid lg:grid-cols-5 lg:overflow-visible">
         {labs.map(lab => <a key={lab.id} href={"#" + lab.id} aria-current={active === lab.id ? "page" : undefined}
           className={"min-w-[min(75vw,260px)] flex-1 snap-start cursor-pointer rounded-xl border-2 p-5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-mint lg:min-w-0 " + (active === lab.id ? "border-mint bg-mint/10" : "border-line bg-[#111b27] hover:border-mint/70 hover:bg-mint/5")}>
           <span className="flex items-center justify-between gap-3"><span className="text-2xl font-bold text-mint">{lab.level}</span><span className="text-[10px] font-bold tracking-wider text-mint">IMPLEMENTED</span></span>
@@ -69,10 +74,10 @@ export default function LabWorkspace() {
           <span className="mt-2 block text-sm text-muted">{lab.description}</span>
           <span className="mt-4 block text-sm font-bold text-mint">{active === lab.id ? "Selected workspace" : "Open lab"} &rarr;</span>
         </a>)}
-        <button type="button" disabled className="min-w-[min(75vw,260px)] flex-1 snap-start cursor-not-allowed rounded-xl border-2 border-dashed border-line p-5 text-left lg:min-w-0" aria-label="Level 4 Real EEG, next development stage, not available yet">
-          <span className="flex items-center justify-between"><span className="text-2xl font-bold text-muted">04</span><span className="text-[10px] font-bold tracking-wider text-amber-200">NEXT</span></span>
-          <span className="mt-3 block text-lg font-bold text-muted">Real EEG</span>
-          <span className="mt-2 block text-sm text-muted">Real epilepsy electrophysiology.</span>
+        <button type="button" disabled className="min-w-[min(75vw,260px)] flex-1 snap-start cursor-not-allowed rounded-xl border-2 border-dashed border-line p-5 text-left lg:min-w-0" aria-label="Level 5 Seizure Forecasting, next development stage, not available yet">
+          <span className="flex items-center justify-between"><span className="text-2xl font-bold text-muted">05</span><span className="text-[10px] font-bold tracking-wider text-amber-200">NEXT</span></span>
+          <span className="mt-3 block text-lg font-bold text-muted">Seizure Forecasting</span>
+          <span className="mt-2 block text-sm text-muted">Future research with real EEG.</span>
           <span className="mt-4 block text-sm text-muted">Not available yet</span>
         </button>
       </nav>
@@ -82,6 +87,7 @@ export default function LabWorkspace() {
       {active === "single-neuron" && <div id="single-neuron" className="scroll-mt-32"><NeuronLab controller={neuron} /></div>}
       {active === "network-lab" && <NetworkLab controller={network} />}
       {active === "epilepsy-dynamics" && <DynamicsLab controller={dynamics} />}
+      {active === "real-eeg" && <EEGLab controller={eeg} />}
     </div>
   </section>;
 }

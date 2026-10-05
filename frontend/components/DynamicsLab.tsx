@@ -127,7 +127,7 @@ export default function DynamicsLab({ controller }: { controller: LabController<
         <p>The model simplifies or omits realistic cell diversity, detailed ion channels, spatial anatomy, heterogeneous synaptic dynamics, realistic cortical connectivity, patient-specific parameters, seizure onset zones, extracellular field generation, and EEG forward modeling.</p>
         <p><strong className="text-white">SIMULATED RESULT:</strong> all plots and comparisons here. <strong className="text-white">REAL DATA:</strong> the DANDI explorer shows archive metadata only. <strong className="text-white">FUTURE VALIDATION:</strong> compare appropriate measurements with real epilepsy electrophysiology, accounting for observation models, uncertainty, and independent data.</p>
         <p>Same seed, software environment, initial voltages, and input fluctuations are used for each pair. Connectivity is identical for weight and drive changes. For a probability change, the same uniform random matrix is thresholded at the new probability, adding or removing edges without resampling all connections.</p>
-        <a href="/research-vision#roadmap" className="inline-block text-mint underline">Next development stage: Level 4 - Real EEG</a>
+        <a href="#real-eeg" className="inline-block text-mint underline">Continue to Level 4 - Real EEG</a>
       </div>
     </div>
   </section>;

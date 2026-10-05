@@ -12,6 +12,8 @@ from .providers import DandiProvider, DatasetMetadata
 from .science import DemoResult, LIFParameters, LIFResult, VERSION, simulate_lif, synthetic_demo
 
 
+from .eeg import router as eeg_router
+
 app = FastAPI(title="NeuroSim Lab API", version=VERSION)
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +21,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+app.include_router(eeg_router)
 provider = DandiProvider()
 
 

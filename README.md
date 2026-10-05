@@ -60,11 +60,11 @@ npm run build
 
 Use the large **Explore NeuroSim Lab** cards to select one active laboratory.
 Single Neuron is the default. The cards show level, name, and implementation
-status; Real EEG is marked NEXT and cannot launch a simulation. The separate
+status; Real EEG is implemented and Seizure Forecasting is marked NEXT. The separate
 Learning + Research Roadmap still describes future work.
 
 Stable links: #single-neuron (with #neuron-lab retained as an alias),
-#network-lab, and #epilepsy-dynamics. Direct links activate the correct lab
+#network-lab, #epilepsy-dynamics, and #real-eeg. Direct links activate the correct lab
 before any simulation starts. Back/Forward restores lab selection. On mobile,
 the cards scroll horizontally with a visible next-card edge and scroll hint.
 
@@ -92,7 +92,7 @@ Select Neural Network in Explore NeuroSim Lab. The exact 100-neuron (80 E / 20 I
 
 The endpoint is `POST /api/network`; `{}` uses defaults. Default duration is 500 ms, connection probability 0.1, excitatory weight 0.5 mV, inhibitory magnitude 2 mV, external drive 22 mV, and seed 42. The simulator is Brian2 2.10.1 with a NumPy runtime and fixed 0.2 ms step. See [API schema and limits](docs/network-api.md), [methodology](docs/methodology.md), [reproducibility](docs/reproducibility.md), and the [Phase 2 verification report](docs/phase2-report.md).
 
-Levels 1, 2, and 3 are implemented. Level 4, **Real EEG**, is the next development stage. No seizure classification, pathological mode, EEG model, or intervention is included.
+Levels 1-4 are implemented. Level 5, **Seizure Forecasting**, is the next development stage. No seizure classification, forecasting or intervention is included.
 
 ## Epilepsy Dynamics (Level 3)
 
@@ -132,7 +132,7 @@ LIF neurons are simplified. Synthetic Poisson trains are not observations. DANDI
 
 ## Future work
 
-Phase 3 implements controlled comparisons of the Phase 2 Brian2 E/I network. Phase 4, Real EEG, is next: real epilepsy electrophysiology and carefully justified model-data comparison. Plasticity, forecasting, interventions, and exports remain future work; none are implemented automatically.
+Phase 3 implements controlled comparisons of the Phase 2 Brian2 E/I network. Phase 4, Real EEG, adds annotated real scalp EEG exploration; it does not establish model-data equivalence. Plasticity, forecasting, interventions, and exports remain future work; none are implemented automatically.
 
 ## Deployment
 
@@ -189,3 +189,26 @@ If deployment still shows `/api/backend`, confirm Vercel is building the latest 
 - [DANDI Archive](https://dandiarchive.org/)
 - [DANDI REST API documentation](https://docs.dandiarchive.org/api/rest-api/)
 - [Neurodata Without Borders](https://www.nwb.org/)
+
+## Phase 4: Real EEG
+
+Open **Explore Labs > Real EEG** or /#real-eeg. The workspace serves a real,
+checksum-verified CHB-MIT subset: case chb01, chb01_03.edf, [2960,3080) seconds,
+eight bipolar derivations at 256 Hz in EDF-calibrated microvolts. The official
+seizure interval is 2996-3036 seconds. Stacked waveforms, descriptive features,
+Welch PSD and equal-duration window comparisons are implemented; forecasting is not.
+
+The 331,547-byte NPZ, provenance manifest and attribution live under
+backend/app/eeg_data/. No EDF download occurs at runtime; missing/corrupt data
+fails explicitly without synthetic replacement. Existing labs and DANDI remain.
+
+See [the complete Phase 4 report](docs/phase4-report.md) for exact sources,
+channels, equations, API, reproduction, verification and deployment limits.
+The offline EDF reader uses Python 3.12 and separate requirements in
+backend/requirements-eeg-preprocessing.txt. The full recording is not bundled.
+
+Run the complete backend suite with python -m pytest tests and numeric checks
+with node tests/test_numeric_input.cjs. The new tests/browser_phase4.cjs uses the
+same external Playwright/Edge setup as existing browser suites, a production
+frontend on port 3030 and backend on port 8000. It forwards relative API requests
+to the real backend to emulate Vercel routing.

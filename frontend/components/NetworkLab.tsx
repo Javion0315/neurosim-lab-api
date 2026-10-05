@@ -1,20 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import type { Data } from "plotly.js";
 import Chart from "./Chart";
 
-import { defaults, loadBaseline, runNetwork, type Parameters, type Result } from "./network-client";
+import { type Parameters, type Result } from "./network-client";
+import { readNumber, validateNumbers, focusInvalid } from "./numeric-input";
+import type { LabController } from "./useLabSession";
 export const controls: { key: keyof Parameters; label: string; unit: string; min: number; max: number; step: number; help: string }[] = [
   { key: "neuron_count", label: "Network size", unit: "neurons", min: 20, max: 200, step: 1, help: "The number of simulated neurons in the network. This is a computational model size, not the number of neurons in a biological brain region." },
   { key: "excitatory_fraction", label: "Excitatory fraction", unit: "0-1", min: 0.5, max: 0.9, step: 0.01, help: "Excitatory neurons increase the probability that connected neurons will fire. Inhibitory neurons reduce the probability that connected neurons will fire." },
   { key: "connection_probability", label: "Connection probability", unit: "0-1", min: 0, max: 0.3, step: 0.01, help: "Higher connectivity allows activity to spread through more pathways in the simulated network. Self-connections are excluded." },
-  { key: "excitatory_weight_mv", label: "Excitatory synaptic weight", unit: "mV / spike", min: 0, max: 2, step: 0.1, help: "Stronger excitatory synapses increase the effect of incoming excitatory spikes." },
+  { key: "excitatory_weight_mv", label: "Excitatory synaptic weight", unit: "mV / spike", min: 0, max: 2, step: 0.05, help: "Stronger excitatory synapses increase the effect of incoming excitatory spikes." },
   { key: "inhibitory_weight_mv", label: "Inhibitory synaptic weight", unit: "mV / spike", min: 0, max: 8, step: 0.1, help: "Stronger inhibitory synapses suppress postsynaptic activity more strongly. This positive magnitude is subtracted from voltage." },
   { key: "external_drive_mv", label: "External drive (R x I)", unit: "mV", min: 0, max: 40, step: 1, help: "External drive represents input arriving from outside the simulated network. It uses the same voltage-drive concept as the Single Neuron Lab, with fixed seeded fluctuations added." },
   { key: "duration_ms", label: "Simulation duration", unit: "ms", min: 50, max: 1000, step: 5, help: "Longer runs show more population activity. Network size x duration must stay at or below 100,000 neuron-ms." },
   { key: "seed", label: "Random seed", unit: "integer", min: 0, max: 4294967295, step: 1, help: "The same seed and parameters should reproduce the same connectivity and stochastic input within the same software environment." },
 ];
+export const networkRules = controls.map(control => ({
+  ...control, integer: ["neuron_count", "duration_ms", "seed"].includes(control.key),
+  multipleOf: control.key === "duration_ms" ? 5 : undefined,
+}));
 const learning = [
   ["Learn", "A synapse conveys a spike’s influence to another neuron. Excitation promotes firing; inhibition suppresses it. E/I balance depends on strengths, activity, and connectivity as well as cell counts."],
   ["Experiment", "Change E/I composition, synaptic strength, connectivity, or external drive. Change one parameter at a time to make comparisons interpretable."],
@@ -73,40 +79,22 @@ export function NetworkResults({ result, rateRange }: { result: Result; rateRang
   </div>;
 }
 
-export default function NetworkLab() {
-  // Strings preserve empty/partial edits, so clearing a field cannot silently become zero.
-  const [values, setValues] = useState<Record<keyof Parameters, string>>(() => Object.fromEntries(Object.entries(defaults).map(([k, v]) => [k, String(v)])) as Record<keyof Parameters, string>);
-  const [result, setResult] = useState<Result | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const pending = useRef(false);
-  const mounted = useRef(false);
-  useEffect(() => {
-    mounted.current = true;
-    let active = true;
-    void loadBaseline().then(data => { if (active) setResult(data.reference.network); })
-      .catch(e => { if (active) setError(e instanceof Error ? e.message : "Could not load baseline."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; mounted.current = false; };
-  }, []);
-  const params = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, Number(v)])) as Parameters;
-  const exceedsBudget = params.neuron_count * params.duration_ms > 100000;
-  const changed = result && controls.some(({ key }) => params[key] !== result.parameters[key]);
-  const exc = Math.floor(params.neuron_count * params.excitatory_fraction + 0.5);
-
-  async function run() {
-    if (pending.current) return;
-    pending.current = true;
-    setLoading(true); setError("");
-    try {
-      const next = await runNetwork(params);
-      if (mounted.current) setResult(next);
-    } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : "Could not run the network simulation.");
-    } finally {
-      pending.current = false;
-      if (mounted.current) setLoading(false);
-    }
+export default function NetworkLab({ controller }: { controller: LabController<Parameters, Result> }) {
+  const { values, result, loading, error, validation } = controller.state;
+  const { initialize } = controller;
+  useEffect(() => initialize(), [initialize]);
+  const params = validateNumbers(values, networkRules).parameters;
+  const work = params ? params.neuron_count * params.duration_ms : null;
+  const exceedsBudget = work !== null && work > 100000;
+  const changed = result && controls.some(({ key }) => readNumber(values[key]) !== result.parameters[key]);
+  const exc = params ? Math.floor(params.neuron_count * params.excitatory_fraction + 0.5) : null;
+  async function run(form: HTMLFormElement) {
+    const check = validateNumbers(values, networkRules);
+    const p = check.parameters;
+    if (p && p.neuron_count * p.duration_ms > 100000) check.errors.duration_ms = "Network size times duration must not exceed 100,000 neuron-ms.";
+    controller.validate(check.errors);
+    if (!p || Object.keys(check.errors).length) { focusInvalid(form); return; }
+    await controller.run(p);
   }
 
   return <section id="network-lab" className="scroll-mt-24 border-y border-line bg-[#0e1721]">
@@ -131,18 +119,20 @@ export default function NetworkLab() {
         <p className="mt-4 text-center text-xs leading-relaxed text-muted">External input reaches both populations. Directed random connections occur within and between E and I populations; each neuron’s output sign follows its population. This diagram is computational, not anatomical.</p>
       </figure>
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <form className="card p-5" onSubmit={e => { e.preventDefault(); void run(); }}>
+        <form noValidate className="card p-5" onSubmit={e => { e.preventDefault(); void run(e.currentTarget); }}>
           <h3 className="font-semibold">Network parameters</h3>
           <fieldset disabled={loading} className="mt-5 space-y-5 disabled:opacity-60">
             <legend className="sr-only">Configure the simulated network</legend>
             {controls.map(({ key, label, unit, min, max, step, help }) => <div key={key}>
               <label htmlFor={`network-${key}`} className="mb-1 flex justify-between gap-2 text-sm text-muted"><span>{label}</span><span className="shrink-0 text-xs">{unit}</span></label>
-              <input id={`network-${key}`} type="number" required min={min} max={max} step={step} value={values[key]} aria-describedby={`network-${key}-help`} onChange={e => setValues({ ...values, [key]: e.target.value })} className="w-full rounded-md border border-line bg-ink px-3 py-2 text-white" />
+              <input id={"network-" + key} type="number" required min={min} max={max} step={step} value={values[key]} aria-invalid={Boolean(validation[key])} aria-describedby={"network-" + key + "-help" + (validation[key] ? " network-" + key + "-error" : "")} onChange={e => controller.edit(key, e.target.value)} className="w-full rounded-md border border-line bg-ink px-3 py-2 text-white" />
+              {validation[key] && <p id={"network-" + key + "-error"} className="mt-2 text-xs text-rose-300">{validation[key]}</p>}
               <p id={`network-${key}-help`} className="mt-2 text-xs leading-relaxed text-muted">{help}</p>
-              {key === "excitatory_fraction" && <p className="mt-2 text-xs text-mint">Derived inhibitory fraction: {number((1 - params.excitatory_fraction) * 100)}%. Rounded populations: {exc} E / {params.neuron_count - exc} I.</p>}
+              {key === "excitatory_fraction" && params && exc !== null && <p className="mt-2 text-xs text-mint">Derived inhibitory fraction: {number((1 - params.excitatory_fraction) * 100)}%. Rounded populations: {exc} E / {params.neuron_count - exc} I.</p>}
             </div>)}
           </fieldset>
-          <p className={`mt-4 text-xs ${exceedsBudget ? "text-rose-300" : "text-muted"}`} aria-live="polite">Work budget: {number(params.neuron_count * params.duration_ms)} / 100,000 neuron-ms.{exceedsBudget && " Reduce size or duration."}</p>
+          <p className={`mt-4 text-xs ${exceedsBudget ? "text-rose-300" : "text-muted"}`} aria-live="polite">Work budget: {work === null ? "Enter valid parameters" : number(work)} / 100,000 neuron-ms.{exceedsBudget && " Reduce size or duration."}</p>
+          {Object.values(validation).some(Boolean) && <p role="alert" className="mt-3 text-sm text-rose-300">Check the highlighted parameters before running.</p>}
           <button type="submit" disabled={loading || exceedsBudget} className="mt-5 w-full rounded-md bg-mint px-4 py-3 font-bold text-ink disabled:opacity-60">{loading ? "Simulating network..." : "Run network simulation"}</button>
           <p className="mt-3 text-xs leading-relaxed text-muted">The 80/20 default is an educational choice, not a universal ratio across brain regions. All runs are simulated.</p>
         </form>
@@ -165,7 +155,7 @@ export default function NetworkLab() {
       </details>
       <aside className="mt-8 rounded-xl border border-line p-6">
         <p className="label">Continue to Level 3 &mdash; Epilepsy Dynamics &middot; Implemented</p>
-        <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted">When excitation, inhibition, connectivity, or synchronization change, network dynamics may shift into qualitatively different states. Compare matched computational experiments in the Epilepsy Dynamics Lab below.</p>
+        <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted">When excitation, inhibition, connectivity, or synchronization change, network dynamics may shift into qualitatively different states. Compare matched computational experiments by selecting the Epilepsy Dynamics Lab.</p>
         <a href="#epilepsy-dynamics" className="mt-3 inline-block text-mint underline">Explore network state transitions &rarr;</a>
       </aside>
     </div>

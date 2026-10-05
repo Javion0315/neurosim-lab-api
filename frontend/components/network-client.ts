@@ -71,7 +71,7 @@ function request<T>(path: string, parameters: object): Promise<T> {
 export const runNetwork = (parameters: Parameters) => request<Result>("/api/network", parameters);
 export const runComparison = (parameters: Experiment | Record<string, never>) => request<Comparison>("/api/network/compare", parameters);
 
-// One exact default simulation shared by both mounted labs, including Strict Mode.
+// Load on first use of either network lab; share the exact default across later selections.
 // Cache only the baseline; a failed load can be retried via either Run button.
 let baseline: Promise<Comparison> | undefined;
 export function loadBaseline(): Promise<Comparison> {

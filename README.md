@@ -1,6 +1,6 @@
 # NeuroSim Lab
 
-An interactive computational neuroscience playground. Phase 3 adds matched network-state experiments and automatic default network loading alongside the existing Single Neuron Lab, labeled synthetic spike demo, and live DANDI metadata search. No biological recording is bundled or implied by the demo.
+An interactive computational neuroscience playground. Phase 3.1 refines numeric editing and adds a selectable laboratory workspace. Phase 3 provides matched network-state experiments and automatic default network loading alongside the existing Single Neuron Lab, labeled synthetic spike demo, and live DANDI metadata search. No biological recording is bundled or implied by the demo.
 
 The platform now also documents a nine-level learning and research roadmap. The `/research-vision` page separates measurable science, research hypotheses, and long-term concepts involving epilepsy research, wearable signals, computational forecasting, and olfactory neuromodulation. It makes no clinical efficacy claim.
 
@@ -49,15 +49,46 @@ On PowerShell, use `Copy-Item .env.example .env.local`. Open `http://localhost:3
 
 ```bash
 python -m pytest tests
+node --test tests/test_numeric_input.cjs
 cd frontend
 npm run lint
 npm run typecheck
 npm run build
 ```
 
+## Explore NeuroSim Lab (Phase 3.1)
+
+Use the large **Explore NeuroSim Lab** cards to select one active laboratory.
+Single Neuron is the default. The cards show level, name, and implementation
+status; Real EEG is marked NEXT and cannot launch a simulation. The separate
+Learning + Research Roadmap still describes future work.
+
+Stable links: #single-neuron (with #neuron-lab retained as an alias),
+#network-lab, and #epilepsy-dynamics. Direct links activate the correct lab
+before any simulation starts. Back/Forward restores lab selection. On mobile,
+the cards scroll horizontally with a visible next-card edge and scroll hint.
+
+Draft inputs, completed results, and pending requests survive switching labs on
+the same page. Inactive lab components and plots are unmounted, not hidden.
+The initial network baseline runs only when a network-based lab is first needed.
+The public archive's synthetic demo loads when its section approaches the viewport.
+
+All 20 numeric fields allow empty editing states without forcing zero. Run or
+Enter validates required values, finite numbers, ranges, integer constraints,
+voltage relationships, and work limits before calling the API. Invalid fields
+receive an inline message and focus. Nothing is silently restored on blur.
+
+Phase 3 initially shows one Reference Network result set and one participation
+trace. Changing a parameter immediately opens the comparison layout; experimental
+outputs appear only when a completed result matches those parameters. Positive
+differences have an explicit + sign without clinical or value judgments.
+
+See the [Phase 3.1 report](docs/phase31-report.md) for the architecture, field
+audit, verification, files changed, and remaining UX limitations.
+
 ## Neural Network Lab (Level 2)
 
-Open the Network Lab after the Single Neuron Lab. The exact 100-neuron (80 E / 20 I) default loads automatically; then vary connectivity, composition, synaptic weights, drive, duration, or seed. Outputs are explicitly **SIMULATED**: E/I spike raster, population firing rates, summary metrics, and a documented population-rate CV proxy. High synchronization is not automatically pathological.
+Select Neural Network in Explore NeuroSim Lab. The exact 100-neuron (80 E / 20 I) default loads automatically; then vary connectivity, composition, synaptic weights, drive, duration, or seed. Outputs are explicitly **SIMULATED**: E/I spike raster, population firing rates, summary metrics, and a documented population-rate CV proxy. High synchronization is not automatically pathological.
 
 The endpoint is `POST /api/network`; `{}` uses defaults. Default duration is 500 ms, connection probability 0.1, excitatory weight 0.5 mV, inhibitory magnitude 2 mV, external drive 22 mV, and seed 42. The simulator is Brian2 2.10.1 with a NumPy runtime and fixed 0.2 ms step. See [API schema and limits](docs/network-api.md), [methodology](docs/methodology.md), [reproducibility](docs/reproducibility.md), and the [Phase 2 verification report](docs/phase2-report.md).
 
@@ -73,7 +104,7 @@ and 5 ms distinct-neuron participation show measured effects without assuming
 a particular outcome. Population-rate CV is retained.
 
 The new POST /api/network/compare endpoint accepts those four optional fields;
-{} runs the exact reference once. Both labs share this initial request. Manual
+{} runs the exact reference once. The two network labs share this initial request on first use. Manual
 Phase 2 runs keep the existing API. Comparison size, composition, duration, and
 seed are fixed to the original defaults, with matched noise and initial voltages.
 

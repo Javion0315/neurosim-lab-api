@@ -165,13 +165,28 @@ No region is labeled clinically and no peak is called a seizure or burst.
 
 ### Baseline autoload
 
-On first mount, both frontend labs call one module-scoped promise for
-POST /api/network/compare with an empty body. The reference preset runs the exact
-Phase 2 default simulator once. Phase 2 displays reference.network; Phase 3
-displays the same completed reference comparison. No precomputed or invented
-activity is used. Loading is visible and controls are disabled until completion.
-The promise is shared across renders and React Strict Mode effect setup/cleanup.
-Effects ignore results after unmount; they do not abort work another consumer needs.
+On first selection of either network-based lab, the frontend uses one
+module-scoped promise for POST /api/network/compare with an empty body. The
+reference preset runs the exact Phase 2 default simulator once. Phase 2 displays
+reference.network; Phase 3 initially displays one Reference Network result set
+and one participation trace. The inactive lab uses this same baseline when
+selected later. No precomputed or invented activity is used. Loading is visible
+and controls are disabled until completion.
+
+Phase 3.1 mounts only the selected laboratory. Parent-owned React session hooks
+preserve raw input drafts, results, errors and pending work across switches.
+Initialization is guarded against repeat effects; completed work updates its
+own session even if that lab is no longer mounted. Single Neuron is the default,
+and direct links resolve before any lab mounts. The separate synthetic archive
+demo loads when its section approaches the viewport.
+
+Changing a Phase 3 draft opens the comparison layout immediately. Until a matching
+experiment completes, its cells say Not run and its plot area prompts a run.
+The reference remains available. Returning to unchanged reference parameters
+collapses to one result set, without modifying or inventing scientific outputs.
+All numeric drafts remain strings; validated finite typed numbers alone reach
+simulation endpoints. Scientific equations, defaults, metrics and API behavior
+are unchanged by this UX refinement.
 
 A successful baseline is cached for the browser module lifetime (reload refreshes
 it). Failed baseline promises are evicted; each lab's Run button can retry.

@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import Chart from "./Chart";
 import { controls, NetworkResults } from "./NetworkLab";
-import { defaults, loadBaseline, runComparison, type Comparison, type Experiment } from "./network-client";
+import { defaults, type Comparison, type Experiment } from "./network-client";
+import { readNumber, validateNumbers, focusInvalid } from "./numeric-input";
+import type { LabController } from "./useLabSession";
 
 const keys: (keyof Experiment)[] = ["excitatory_weight_mv", "inhibitory_weight_mv", "connection_probability", "external_drive_mv"];
 const experimentControls = controls.filter(c => keys.includes(c.key as keyof Experiment));
-const reference: Experiment = {
+export const reference: Experiment = {
   excitatory_weight_mv: defaults.excitatory_weight_mv, inhibitory_weight_mv: defaults.inhibitory_weight_mv,
   connection_probability: defaults.connection_probability, external_drive_mv: defaults.external_drive_mv,
 };
@@ -18,47 +20,31 @@ const presets: { label: string; changes: Partial<Experiment>; description: strin
   { label: "Increased connectivity", changes: { connection_probability: 0.15 }, description: "Connection probability: 0.10 to 0.15 (+50%). All other parameters fixed." },
   { label: "Increased external drive", changes: { external_drive_mv: 26 }, description: "External drive: 22 to 26 mV (+4 mV). All other parameters fixed." },
 ];
-const strings = (p: Experiment) => Object.fromEntries(keys.map(k => [k, String(p[k])])) as Record<keyof Experiment, string>;
+const timeRange: [number, number] = [0, 500];
+const fractionRange: [number, number] = [0, 1];
 const fmt = (n: number | null) => n === null ? "Undefined (silent)" : n.toLocaleString(undefined, { maximumFractionDigits: 3 });
 
-export default function DynamicsLab() {
-  const [values, setValues] = useState(() => strings(reference));
-  const [result, setResult] = useState<Comparison | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const mounted = useRef(false);
-  const pending = useRef(false);
-  useEffect(() => {
-    let active = true;
-    mounted.current = true;
-    void loadBaseline().then(data => { if (active) setResult(data); })
-      .catch(e => { if (active) setError(e instanceof Error ? e.message : "Could not load reference."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; mounted.current = false; };
-  }, []);
-  const params = Object.fromEntries(keys.map(k => [k, Number(values[k])])) as Experiment;
-  const stale = result && keys.some(k => params[k] !== result.experimental.network.parameters[k]);
-  const draftChanges = keys.filter(k => params[k] !== reference[k]);
+export default function DynamicsLab({ controller }: { controller: LabController<Experiment, Comparison> }) {
+  const { values, result, loading, error, validation } = controller.state;
+  const { initialize } = controller;
+  useEffect(() => initialize(), [initialize]);
+  const stale = result && keys.some(k => readNumber(values[k]) !== result.experimental.network.parameters[k]);
+  const draftChanges = keys.filter(k => readNumber(values[k]) !== reference[k]);
+  const comparisonMode = draftChanges.length > 0;
+  const haveExperiment = Boolean(comparisonMode && result && result.changes.length && !stale);
   const rateRange = useMemo<[number, number]>(() => [0, result ? Math.max(1,
     ...result.reference.network.rates.excitatory_hz, ...result.reference.network.rates.inhibitory_hz,
-    ...result.experimental.network.rates.excitatory_hz, ...result.experimental.network.rates.inhibitory_hz) * 1.05 : 1], [result]);
+    ...(haveExperiment ? result.experimental.network.rates.excitatory_hz : []), ...(haveExperiment ? result.experimental.network.rates.inhibitory_hz : [])) * 1.05 : 1], [result, haveExperiment]);
   const participation = useMemo(() => result ? [
     { x: result.reference.network.rates.time_ms, y: result.reference.coordination.active_fraction, name: "Reference", type: "scatter" as const, mode: "lines" as const, line: { color: "#91e6cb", shape: "hvh" as const } },
-    { x: result.experimental.network.rates.time_ms, y: result.experimental.coordination.active_fraction, name: "Experimental", type: "scatter" as const, mode: "lines" as const, line: { color: "#e7bb80", dash: "dot" as const, shape: "hvh" as const } },
-  ] : [], [result]);
-  async function run() {
-    if (pending.current) return;
-    pending.current = true;
-    setLoading(true); setError("");
-    try {
-      const next = await runComparison(params);
-      if (mounted.current) setResult(next);
-    } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : "Comparison failed.");
-    } finally {
-      pending.current = false;
-      if (mounted.current) setLoading(false);
-    }
+    ...(haveExperiment ? [{ x: result.experimental.network.rates.time_ms, y: result.experimental.coordination.active_fraction, name: "Experimental", type: "scatter" as const, mode: "lines" as const, line: { color: "#e7bb80", dash: "dot" as const, shape: "hvh" as const } }] : []),
+  ] : [], [result, haveExperiment]);
+  async function run(form: HTMLFormElement) {
+    const rules = experimentControls.map(c => ({ ...c, key: c.key as keyof Experiment }));
+    const check = validateNumbers(values, rules);
+    controller.validate(check.errors);
+    if (!check.parameters) { focusInvalid(form); return; }
+    await controller.run(check.parameters);
   }
   const rows = result ? [
     ["Mean firing rate (Hz/neuron)", result.reference.network.summary.mean_firing_rate_hz, result.experimental.network.summary.mean_firing_rate_hz],
@@ -86,42 +72,48 @@ export default function DynamicsLab() {
         ["Research", "Simulated seizure-like dynamics require future comparison with real electrophysiological recordings and a justified observation model. Spikes and population firing rates are not EEG."],
       ].map(([label, text]) => <div className="border-l border-line pl-3" key={label}><dt className="label">{label}</dt><dd className="mt-2 text-xs leading-relaxed text-muted">{text}</dd></div>)}</dl>
 
-      <form className="card mt-8 p-5" onSubmit={e => { e.preventDefault(); void run(); }}>
+      <form noValidate className="card mt-8 p-5" onSubmit={e => { e.preventDefault(); void run(e.currentTarget); }}>
         <h3 className="font-semibold">Experimental condition</h3>
         <p className="mt-2 text-sm text-muted">Reference Network: the exact Phase 2 defaults. Fixed at 100 neurons (80 E / 20 I), 500 ms, seed 42. These modest presets are controlled computational experiments; no outcome is guaranteed.</p>
         <fieldset disabled={loading} className="mt-5 disabled:opacity-60">
           <legend className="sr-only">Configure experiment</legend>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{presets.map(preset => <button key={preset.label} type="button" className="rounded-lg border border-line p-3 text-left hover:border-mint" onClick={() => setValues(strings({ ...reference, ...preset.changes }))}><span className="text-sm font-semibold text-mint">{preset.label}</span><span className="mt-2 block text-xs leading-relaxed text-muted">{preset.description}</span></button>)}</div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{presets.map(preset => <button key={preset.label} type="button" className="rounded-lg border border-line p-3 text-left hover:border-mint" onClick={() => controller.choose({ ...reference, ...preset.changes })}><span className="text-sm font-semibold text-mint">{preset.label}</span><span className="mt-2 block text-xs leading-relaxed text-muted">{preset.description}</span></button>)}</div>
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{experimentControls.map(c => {
             const key = c.key as keyof Experiment;
             return <label key={key} className="block text-sm text-muted">{c.label}<span className="ml-2 text-xs">({c.unit})</span>
-              <input aria-label={"Experimental " + c.label} required type="number" min={c.min} max={c.max} step={key === "excitatory_weight_mv" ? 0.05 : c.step} value={values[key]} onChange={e => setValues({ ...values, [key]: e.target.value })} className="mt-2 w-full rounded-md border border-line bg-ink px-3 py-2 text-white" />
+              <input aria-label={"Experimental " + c.label} required type="number" min={c.min} max={c.max} step={key === "excitatory_weight_mv" ? 0.05 : c.step} value={values[key]} id={"experimental-" + key} aria-invalid={Boolean(validation[key])} aria-describedby={validation[key] ? "experimental-" + key + "-error" : undefined} onChange={e => controller.edit(key, e.target.value)} className="mt-2 w-full rounded-md border border-line bg-ink px-3 py-2 text-white" />
+              {validation[key] && <span id={"experimental-" + key + "-error"} className="mt-2 block text-xs text-rose-300">{validation[key]}</span>}
               <span className="mt-2 block text-xs">Reference: {reference[key]} {c.unit}</span>
             </label>;
           })}</div>
         </fieldset>
-        <p className="mt-4 text-sm text-muted">Pending changes: {draftChanges.length ? draftChanges.map(k => experimentControls.find(c => c.key === k)?.label + ": " + reference[k] + " to " + (values[k] || "(empty)")).join("; ") : "none; reproduce the reference."}</p>
+        <p className="mt-4 text-sm text-muted">Pending changes: {draftChanges.length ? draftChanges.map(k => experimentControls.find(c => c.key === k)?.label + ": " + reference[k] + " -> " + (values[k] || "(empty)") + " " + experimentControls.find(c => c.key === k)?.unit).join("; ") : "none; reproduce the reference."}</p>
         {draftChanges.length > 1 && <p className="mt-2 text-sm text-amber-200">Multiple parameters differ. To isolate a mechanism, choose a preset and vary one parameter.</p>}
-        <button disabled={loading} className="mt-5 rounded-md bg-mint px-5 py-3 font-bold text-ink disabled:opacity-60">{loading ? "Simulating comparison..." : "Run comparison"}</button>
+        {Object.values(validation).some(Boolean) && <p role="alert" className="mt-3 text-sm text-rose-300">Check the highlighted parameters before running.</p>}
+        <button type="submit" disabled={loading} className="mt-5 rounded-md bg-mint px-5 py-3 font-bold text-ink disabled:opacity-60">{loading ? "Simulating comparison..." : "Run comparison"}</button>
       </form>
 
       <div className="mt-6 space-y-5" aria-busy={loading} data-testid="dynamics-results">
-        <p role="status" className="text-sm text-muted">{loading ? "Generating the matched reference and experimental conditions..." : stale ? "Parameters changed. Results show the last completed comparison." : result ? "Showing the completed comparison." : "Run comparison to retry loading the reference."}</p>
+        <p role="status" className="text-sm text-muted">{loading ? "Generating the matched reference and experimental conditions..." : result && !comparisonMode ? "Reference baseline established. Choose an experimental condition or change a parameter to compare network dynamics." : stale ? "Parameters changed. Run comparison to generate matching experimental results." : result ? "Showing the completed comparison." : "Run comparison to retry loading the reference."}</p>
         {error && <p role="alert" className="rounded border border-rose-700 p-3 text-rose-300">{error}</p>}
         {result && <>
-          <div className="card p-5">
+          {comparisonMode && <div className="card p-5" data-testid="comparison-table">
             <h3 className="font-semibold">Measured network state</h3>
-            <p className="mt-2 text-sm text-muted">Completed changes: {result.changes.length ? result.changes.map(c => experimentControls.find(control => control.key === c.parameter)?.label + ": " + c.reference + " to " + c.experimental).join("; ") : "none (identical reference and experimental parameters)."}</p>
+            <p className="mt-2 text-sm text-muted">{haveExperiment ? "Completed changes: " + result.changes.map(c => experimentControls.find(control => control.key === c.parameter)?.label + ": " + c.reference + " -> " + c.experimental + " " + experimentControls.find(control => control.key === c.parameter)?.unit).join("; ") : "Experimental results pending. Run comparison after finishing your edits."}</p>
             <p className="mt-2 text-xs leading-relaxed text-muted">{result.fixed_conditions}</p>
-            <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Reference versus experimental measurements</caption><thead><tr className="border-b border-line"><th className="p-2">Measure</th><th className="p-2">Reference</th><th className="p-2">Experimental</th><th className="p-2">Difference</th></tr></thead><tbody>{rows.map(([label, a, b]) => <tr className="border-b border-line" key={label}><th className="p-2 font-normal text-muted">{label}</th><td className="p-2">{fmt(a)}</td><td className="p-2">{fmt(b)}</td><td className="p-2">{a === null || b === null ? "Undefined" : fmt(b - a)}</td></tr>)}</tbody></table></div>
-            <p className="mt-4 text-sm text-muted">Read rate and participation together: higher rate means more spikes per second; higher peak participation means more distinct neurons active within at least one shared 5 ms window. These relative measurements do not assign clinical regions or prove a state transition.</p>
+            <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Reference versus experimental measurements</caption><thead><tr className="border-b border-line"><th className="p-2">Measure</th><th className="p-2">Reference</th><th className="p-2">Experimental</th><th className="p-2">Difference</th></tr></thead><tbody>{rows.map(([label, a, b]) => <tr className="border-b border-line" key={label}><th className="p-2 font-normal text-muted">{label}</th><td className="p-2">{fmt(a)}</td><td className="p-2">{haveExperiment ? fmt(b) : "Not run"}</td><td className="p-2">{!haveExperiment ? "Not run" : a === null || b === null ? "Undefined" : (b > a ? "+" : "") + fmt(b - a)}</td></tr>)}</tbody></table></div>
+            <p className="mt-4 text-sm text-muted">Differences are experimental minus reference, in the units shown. Higher or lower does not mean better, worse, or pathological. Read rate and participation together; these measurements do not prove a state transition.</p>
+          </div>}
+          <div data-testid={comparisonMode ? "comparison-view" : "reference-view"} className={comparisonMode ? "grid items-start gap-5 xl:grid-cols-2" : "min-w-0"}>
+            <div className="min-w-0 space-y-4"><h3 className="text-xl font-bold">Reference Network</h3><NetworkResults result={result.reference.network} rateRange={rateRange} /></div>
+            {comparisonMode && <div className="min-w-0 space-y-4"><h3 className="text-xl font-bold">Experimental Condition</h3>
+              {haveExperiment ? <NetworkResults result={result.experimental.network} rateRange={rateRange} /> : <div className="card p-6 text-sm text-muted">Run comparison to generate results for the experimental condition. The Reference Network remains your comparison point.</div>}
+            </div>}
           </div>
-          <div className="grid items-start gap-5 xl:grid-cols-2">{[
-            { label: "Reference Network", condition: result.reference }, { label: "Experimental condition", condition: result.experimental },
-          ].map(({ label, condition }) => <div className="min-w-0 space-y-4" key={label}><h3 className="text-xl font-bold">{label}</h3><NetworkResults result={condition.network} rateRange={rateRange} /></div>)}</div>
           <div className="card p-5"><h3 className="font-semibold">Temporal population participation</h3>
-            <p className="mt-2 text-sm text-muted">Distinct active neurons / 100 in each 5 ms window. Both conditions use the same axes; overlapping traces are expected for the reference preset.</p>
-            <Chart data={participation} yTitle="Active fraction (0-1)" showLegend xRange={[0, 500]} yRange={[0, 1]} />
+            <p className="mt-2 text-sm text-muted">Distinct active neurons / 100 in each 5 ms window. {haveExperiment ? "Reference and experimental traces use the same axes." : "Showing the Reference Network."}</p>
+            {!comparisonMode && <dl className="mt-4 flex flex-wrap gap-8 text-sm"><div><dt className="text-muted">Mean active fraction</dt><dd className="mt-1 font-bold text-mint">{fmt(result.reference.coordination.mean_active_fraction)}</dd></div><div><dt className="text-muted">Peak active fraction</dt><dd className="mt-1 font-bold text-mint">{fmt(result.reference.coordination.peak_active_fraction)}</dd></div></dl>}
+            <Chart data={participation} yTitle="Active fraction (0-1)" showLegend xRange={timeRange} yRange={fractionRange} />
           </div>
         </>}
       </div>

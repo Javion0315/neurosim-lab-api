@@ -31,11 +31,10 @@ const scientific = value => { const result = structuredClone(value); delete resu
       calls.push({ path: url.pathname, request: route.request().postDataJSON(), status: response.status(), body });
       await route.fulfill({ response });
     });
-    await page.goto(frontend, { waitUntil: "domcontentloaded" });
+    await page.goto(frontend + "#network-lab", { waitUntil: "domcontentloaded" });
     await page.locator("#network-lab [aria-busy=true]").waitFor();
-    await page.locator("#epilepsy-dynamics [aria-busy=true]").waitFor();
     release();
-    await page.locator("#epilepsy-dynamics [aria-busy=false] table").waitFor({ timeout: 45000 });
+    await page.locator("#network-lab [aria-busy=false] [data-testid=network-results]").waitFor({ timeout: 45000 });
     await page.waitForFunction(() => document.querySelectorAll("#network-lab .js-plotly-plot").length === 2);
     assert.equal(calls.filter(c => c.path.startsWith("/api/network")).length, 1, "one shared initial request");
     const initial = calls.find(c => c.path === "/api/network/compare").body;
@@ -47,6 +46,11 @@ const scientific = value => { const result = structuredClone(value); delete resu
     const manual = calls.filter(c => c.path === "/api/network").at(-1);
     assert.equal(manual.status, 200);
     assert.deepEqual(scientific(initial.reference.network), scientific(manual.body));
+    await page.getByRole("navigation", { name: "Lab selector" }).getByRole("link", { name: /Epilepsy Dynamics/ }).click();
+    await dynamics.locator("[data-testid=reference-view]").waitFor();
+    await page.waitForFunction(() => document.querySelectorAll("#epilepsy-dynamics .js-plotly-plot").length === 3);
+    assert.equal(await dynamics.locator("[data-testid=network-results]").count(), 1);
+    assert.equal(await dynamics.locator("table").count(), 0);
     // Re-renders from draft edits and preset selection must not run simulations.
     const before = calls.length;
     await dynamics.getByRole("button", { name: /^Increased excitation/ }).click();
@@ -74,6 +78,8 @@ const scientific = value => { const result = structuredClone(value); delete resu
     assert.deepEqual(plots[4].yRange, [0, 1]);
     assert.equal(await dynamics.locator("tbody tr").count(), 6);
     // Existing single-neuron interaction and synthetic demo still render.
+    await page.getByRole("navigation", { name: "Lab selector" }).getByRole("link", { name: /Single Neuron/ }).click();
+    await page.locator("#neuron-lab [aria-busy=false]").waitFor();
     await page.locator("#neuron-lab").getByRole("button", { name: "Run simulation", exact: true }).click();
     await page.locator("#neuron-lab").getByRole("button", { name: "Run simulation", exact: true }).waitFor();
     await page.waitForFunction(() => document.querySelectorAll("#neuron-lab .js-plotly-plot").length === 2);
@@ -81,6 +87,7 @@ const scientific = value => { const result = structuredClone(value); delete resu
     await page.getByRole("heading", { name: "Browser test metadata" }).waitFor();
     await page.waitForFunction(() => document.querySelectorAll("#real-data .js-plotly-plot").length === 1);
     // Preserve Phase 2 safety and silent-network behavior.
+    await page.getByRole("navigation", { name: "Lab selector" }).getByRole("link", { name: /Neural Network/ }).click();
     await network.locator("#network-neuron_count").fill("200");
     await network.locator("#network-duration_ms").fill("1000");
     assert.equal(await network.getByRole("button", { name: "Run network simulation" }).isDisabled(), true);
@@ -90,6 +97,7 @@ const scientific = value => { const result = structuredClone(value); delete resu
     await network.getByRole("button", { name: "Run network simulation" }).click();
     await network.getByText("No spikes occurred in this run.", { exact: false }).waitFor();
     assert.equal(calls.filter(c => c.path === "/api/network").at(-1).body.summary.total_spikes, 0);
+    await page.getByRole("navigation", { name: "Lab selector" }).getByRole("link", { name: /Epilepsy Dynamics/ }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await dynamics.scrollIntoViewIfNeeded();
     await page.waitForFunction(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -98,24 +106,25 @@ const scientific = value => { const result = structuredClone(value); delete resu
     assert(calls.every(c => c.status === 200));
     // Recover independently after an initial busy response.
     const retry = await browser.newPage();
-    let failOnce = true;
+    let failures = 2;
     await retry.route("**/api/**", async route => {
       const url = new URL(route.request().url());
-      if (url.pathname === "/api/network/compare" && failOnce) {
-        failOnce = false;
+      if (url.pathname === "/api/network/compare" && failures > 0) {
+        failures -= 1;
         await route.fulfill({ status: 503, json: { detail: "Simulator busy; retry shortly." } });
         return;
       }
       const response = await route.fetch({ url: backend + url.pathname + url.search });
       await route.fulfill({ response });
     });
-    await retry.goto(frontend);
+    await retry.goto(frontend + "#network-lab");
     await retry.locator("#network-lab [role=alert]").waitFor();
-    await retry.locator("#epilepsy-dynamics [role=alert]").waitFor();
     await retry.locator("#network-lab").getByRole("button", { name: "Run network simulation" }).click();
     await retry.locator("#network-lab [data-testid=network-results]").waitFor();
+    await retry.getByRole("navigation", { name: "Lab selector" }).getByRole("link", { name: /Epilepsy Dynamics/ }).click();
+    await retry.locator("#epilepsy-dynamics [role=alert]").waitFor();
     await retry.locator("#epilepsy-dynamics").getByRole("button", { name: "Run comparison", exact: true }).click();
-    await retry.locator("#epilepsy-dynamics table").waitFor();
+    await retry.locator("#epilepsy-dynamics [data-testid=reference-view]").waitFor();
     assert.equal(await retry.locator("#network-lab [role=alert], #epilepsy-dynamics [role=alert]").count(), 0);
     console.log("PASS: baseline loading/deduplication/manual equivalence, preset comparison, exact plotted data, matched axes, metrics, stale drafts, Phase 1, Phase 2 bounds/silence, DANDI fixture UI, mobile layout, busy recovery; no page errors.");
   } finally { await browser.close(); }
